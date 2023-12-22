@@ -15,27 +15,32 @@ class CryptoPriceTracker:
         if 'Preferences' not in self.config:
             self.config.add_section('Preferences')
 
+        # Créer la section 'Prices' si elle n'existe pas
+        if 'Prices' not in self.config:
+            self.config.add_section('Prices')
+
+        # Créer un Treeview pour afficher le tableau
+        self.tree = ttk.Treeview(master, columns=("Paire", "Dernier Achat", "Dernière Vente"))
+        self.tree.grid(row=1, column=0, columnspan=3, padx=10, pady=10)
+
+        self.tree.heading("#0", text="Paires")
+        self.tree.heading("#1", text="Dernier Achat")
+        self.tree.heading("#2", text="Dernière Vente")
+
         self.pairs_label = ttk.Label(master, text="Paires de Crypto (séparées par des virgules):")
-        self.pairs_label.grid(row=0, column=0, padx=10, pady=10, sticky='w')
+        self.pairs_label.grid(row=2, column=0, padx=10, pady=10, sticky='w')
 
         self.pairs_entry = ttk.Entry(master)
-        self.pairs_entry.grid(row=0, column=1, padx=10, pady=10)
+        self.pairs_entry.grid(row=2, column=1, padx=10, pady=10)
 
         self.check_button = ttk.Button(master, text="Vérifier les Prix", command=self.check_prices)
-        self.check_button.grid(row=0, column=2, padx=10, pady=10)
+        self.check_button.grid(row=2, column=2, padx=10, pady=10)
 
         self.price_label = ttk.Label(master, text="Prix en Temps Réel (USD):")
-        self.price_label.grid(row=1, column=0, padx=10, pady=10, sticky='w')
+        self.price_label.grid(row=3, column=0, padx=10, pady=10, sticky='w')
 
         self.price_display = ttk.Label(master, text="")
-        self.price_display.grid(row=1, column=1, columnspan=2, padx=10, pady=10, sticky='w')
-
-        # Nouveaux labels pour afficher les derniers prix d'achat et de vente
-        self.last_buy_label = ttk.Label(master, text="Dernier Achat (USD):")
-        self.last_buy_label.grid(row=2, column=0, padx=10, pady=10, sticky='w')
-
-        self.last_sell_label = ttk.Label(master, text="Dernière Vente (USD):")
-        self.last_sell_label.grid(row=3, column=0, padx=10, pady=10, sticky='w')
+        self.price_display.grid(row=3, column=1, columnspan=2, padx=10, pady=10, sticky='w')
 
         # Champs d'entrée pour saisir le dernier prix et le type (achat/vente)
         self.last_price_entry = ttk.Entry(master)
@@ -58,8 +63,6 @@ class CryptoPriceTracker:
         # Charger les préférences sauvegardées
         self.load_preferences()
         self.load_last_prices() 
-        # Définir la fonction de mise à jour des prix à intervalles réguliers (en commentant cette ligne)
-        # self.update_prices()
 
     def get_crypto_prices(self, symbols):
         try:
@@ -85,39 +88,14 @@ class CryptoPriceTracker:
             formatted_prices = "\n".join([f"{pair}: {price['usd']} USD" for pair, price in prices.items()])
             self.price_display.config(text=f"Prix actuels :\n{formatted_prices}")
 
-            # Mettre à jour les derniers prix d'achat et de vente avec des valeurs fictives pour l'instant
-            self.update_last_prices()
-
-            # Sauvegarder les préférences après chaque vérification des prix
-            self.save_preferences()
+            # Ajouter la paire et les derniers prix au tableau
+            for pair in pairs:
+                self.add_pair_to_table(pair, "", "")
         except Exception as e:
             messagebox.showerror("Erreur", f"Erreur : {str(e)}")
 
-    # Fonction de mise à jour manuelle des prix
-    def update_prices(self):
-        # Mettre à jour les prix
-        pairs = [pair.strip().lower() for pair in self.pairs_entry.get().split(",")]
-
-        try:
-            prices = self.get_crypto_prices(pairs)
-            formatted_prices = "\n".join([f"{pair}: {price['usd']} USD" for pair, price in prices.items()])
-            self.price_display.config(text=f"Prix actuels :\n{formatted_prices}")
-        except Exception as e:
-            messagebox.showerror("Erreur", f"Erreur : {str(e)}")
-
-    def update_last_prices(self):
-        # Mettre à jour les derniers prix d'achat et de vente avec les valeurs enregistrées
-        try:
-            last_buy_price = float(self.config.get('Preferences', 'LastBuyPrice'))
-            last_sell_price = float(self.config.get('Preferences', 'LastSellPrice'))
-
-            # Afficher les derniers prix dans les labels correspondants
-            self.last_buy_label.config(text=f"Dernier Achat (USD): {last_buy_price:.2f} USD")
-            self.last_sell_label.config(text=f"Dernière Vente (USD): {last_sell_price:.2f} USD")
-        except (configparser.NoSectionError, configparser.NoOptionError, ValueError) as e:
-            print(f"Erreur lors de la mise à jour des derniers prix : {e}")
-            # Vous pouvez ajouter un message d'erreur supplémentaire si nécessaire
-
+    def add_pair_to_table(self, pair, last_buy, last_sell):
+        self.tree.insert("", "end", values=(pair, last_buy, last_sell))
 
     def save_last_price(self):
         # Enregistrer le dernier prix avec le type (achat/vente) dans les préférences
@@ -139,99 +117,49 @@ class CryptoPriceTracker:
             messagebox.showerror("Erreur", "Veuillez saisir un nombre valide pour le prix.")
             return
 
-        if last_type.lower() == "achat":
-            self.last_buy_label.config(text=f"Dernier Achat (USD): {last_price} USD")
-        elif last_type.lower() == "vente":
-            self.last_sell_label.config(text=f"Dernière Vente (USD): {last_price} USD")
+        selected_item = self.tree.selection()
+
+        if selected_item:
+            # Mettre à jour la ligne sélectionnée avec les nouveaux prix
+            self.tree.item(selected_item, values=(selected_item[0], last_price, last_type))
         else:
-            messagebox.showerror("Erreur", "Veuillez sélectionner un type valide (Achat/Vente).")
+            messagebox.showerror("Erreur", "Veuillez sélectionner une paire dans le tableau.")
             return
 
         # Sauvegarder les préférences après chaque enregistrement du dernier prix
         self.save_preferences()
 
-
-
-
-
-
-
-
     def edit_last_price(self):
         # Modifier le dernier prix en ouvrant une nouvelle fenêtre de modification
-        edit_window = tk.Toplevel(self.master)
-        edit_window.title("Modifier le Dernier Prix")
+        selected_item = self.tree.selection()
 
-        # Champs d'entrée pour modifier le dernier prix et le type (achat/vente)
-        edit_price_label = ttk.Label(edit_window, text="Nouveau Prix:")
-        edit_price_label.grid(row=0, column=0, padx=10, pady=10)
+        if selected_item:
+            # Extraire les valeurs de la ligne sélectionnée
+            pair, last_buy, last_sell = self.tree.item(selected_item, 'values')
 
-        edit_price_entry = ttk.Entry(edit_window)
-        edit_price_entry.grid(row=0, column=1, padx=10, pady=10)
+            # Remplir les champs d'entrée avec les valeurs existantes
+            self.last_price_entry.delete(0, tk.END)
+            self.last_price_entry.insert(0, last_buy)
+            self.last_type_entry.set(last_sell)
 
-        edit_type_label = ttk.Label(edit_window, text="Nouveau Type:")
-        edit_type_label.grid(row=1, column=0, padx=10, pady=10)
-
-        edit_type_entry = ttk.Combobox(edit_window, values=["Achat", "Vente"])
-        edit_type_entry.grid(row=1, column=1, padx=10, pady=10)
-
-        # Bouton pour appliquer la modification
-        apply_button = ttk.Button(edit_window, text="Appliquer", command=lambda: self.apply_edit(edit_window, edit_price_entry, edit_type_entry))
-        apply_button.grid(row=2, column=0, columnspan=2, pady=10)
-
-    def apply_edit(self, edit_window, edit_price_entry, edit_type_entry):
-        # Appliquer la modification du dernier prix
-        new_price = edit_price_entry.get()
-        new_type = edit_type_entry.get()
-
-        # Vous devriez également vérifier si new_price est un nombre valide
-        try:
-            new_price = float(new_price)
-        except ValueError:
-            messagebox.showerror("Erreur", "Veuillez saisir un nombre valide pour le prix.")
-            return
-
-        if new_type.lower() == "achat":
-            self.last_buy_label.config(text=f"Dernier Achat (USD): {new_price} USD")
-        elif new_type.lower() == "vente":
-            self.last_sell_label.config(text=f"Dernière Vente (USD): {new_price} USD")
+            # Appeler la méthode pour sauvegarder le dernier prix après modification
+            self.save_last_price()
         else:
-            messagebox.showerror("Erreur", "Veuillez sélectionner un type valide (Achat/Vente).")
-            return
-
-        # Sauvegarder les préférences après chaque modification du dernier prix
-        self.save_preferences()
-
-        # Fermer la fenêtre de modification
-        edit_window.destroy()
-
-    def save_last_prices(self):
-        # Sauvegarder les derniers prix dans le fichier de préférences
-        last_buy_price = self.last_buy_label.cget("text").split(":")[1].strip()
-        last_sell_price = self.last_sell_label.cget("text").split(":")[1].strip()
-
-        self.config.set('Preferences', 'LastBuyPrice', last_buy_price)
-        self.config.set('Preferences', 'LastSellPrice', last_sell_price)
-
-        with open('preferences.ini', 'w') as configfile:
-            self.config.write(configfile)
-
-    def load_last_prices(self):
-        # Charger les derniers prix depuis le fichier de préférences
-        try:
-            last_buy_price = self.config.get('Preferences', 'LastBuyPrice')
-            last_sell_price = self.config.get('Preferences', 'LastSellPrice')
-
-            self.last_buy_label.config(text=f"Dernier Achat (USD): {last_buy_price} USD")
-            self.last_sell_label.config(text=f"Dernière Vente (USD): {last_sell_price}")
-        except (configparser.NoSectionError, configparser.NoOptionError) as e:
-            print(f"Erreur lors du chargement des derniers prix : {e}")
+            messagebox.showerror("Erreur", "Veuillez sélectionner une paire dans le tableau.")
 
     def save_preferences(self):
         # Sauvegarder les préférences dans un fichier
         pairs_value = self.pairs_entry.get()
         print(f"Saving preferences: Pairs={pairs_value}")
         self.config.set('Preferences', 'Pairs', pairs_value)
+
+        # Sauvegarder les paires dans la section 'Prices'
+        self.config.remove_section('Prices')
+        self.config.add_section('Prices')
+        for item in self.tree.get_children():
+            pair, last_buy, last_sell = self.tree.item(item, 'values')
+            self.config.set('Prices', pair, f"{last_buy},{last_sell}")
+
         with open('preferences.ini', 'w') as configfile:
             self.config.write(configfile)
 
@@ -245,13 +173,23 @@ class CryptoPriceTracker:
                 pairs = self.config.get('Preferences', 'Pairs')
                 print(f"Loading preferences: Pairs={pairs}")
                 self.pairs_entry.insert(0, pairs)
+
+            # Charger les paires depuis la section 'Prices'
+            if 'Prices' in self.config:
+                for pair, prices in self.config.items('Prices'):
+                    last_buy, last_sell = prices.split(',')
+                    self.add_pair_to_table(pair, last_buy, last_sell)
+
         except (FileNotFoundError, configparser.NoSectionError, configparser.NoOptionError) as e:
             print(f"Erreur lors du chargement des préférences : {e}")
+
+    def load_last_prices(self):
+        # Charger les derniers prix depuis le fichier de préférences
+        pass  # Pas besoin de charger les derniers prix ici
 
     def save_and_quit(self):
         # Sauvegarder les préférences avant de quitter l'application
         self.save_preferences()
-        self.save_last_prices()
         self.master.quit()
 
 def main():
